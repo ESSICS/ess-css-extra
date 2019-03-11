@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 
-export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_191.jdk/Contents/Home
+export JAVA_HOME=$JAVA8_HOME
 
 echo ""
 echo "===="
