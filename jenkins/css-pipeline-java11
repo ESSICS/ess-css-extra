@@ -11,7 +11,7 @@ pipeline {
    */
   environment {
     MAVEN_OPTS="-Xmx2048m -Xms1024M -Xss128M -XX:-UseGCOverheadLimit"
-    MVNOPT="-q -B -P ess-css-settings,platform-default,csstudio-composite-repo-enable,eclipse-sites -Dmaven.repo.local=/home/jenkins/workspace/css-maven-repo/.m2 -Dcsstudio.composite.repo=/home/jenkins/workspace/${env.JOB_NAME}/ess-css-extra/ess_css_comp_repo"
+    MVNOPT="-q -B -P ess-css-settings,platform-default,csstudio-composite-repo-enable,eclipse-sites -Dmaven.repo.local=${WORKSPACE}/css-maven-repo/.m2 -Dcsstudio.composite.repo=${WORKSPACE}/ess-css-extra/ess_css_comp_repo"
     EMAIL_BODY_FAILURE="${env.JOB_BASE_NAME} failed to build!\nDirect job link: ${env.RUN_DISPLAY_URL}"
     EMAIL_BODY_SUCCESS="${env.JOB_BASE_NAME} built successfully!\nDirect job link: ${env.RUN_DISPLAY_URL}"
     EMAIL_BODY_UNSTABLE="${env.JOB_BASE_NAME} created an unstable build!\nDirect job link: ${env.RUN_DISPLAY_URL}"
@@ -26,12 +26,8 @@ pipeline {
    * Can be applied to each stage separately or here to set for all stages.
    */
    agent {
-//      docker {
-//        image 'europeanspallationsource/oracle-jdk-maven'
-//        label 'css'
-//      }
-      label 'css'
-    }
+      label 'jdk11'
+   }
 
     /*
      * build specific options, the same as the checkboxes for the jobs inside jenkins
@@ -58,10 +54,10 @@ pipeline {
           echo "csstudioRepo = ${env.csstudioRepo}"
           echo "branch = ${env.repoBranch} \nsend email to: ${env.email}"
           echo "MVNOPT=${env.MVNOPT}  \nrunning on jenkinslave: ${env.NODE_NAME}"
-          echo "project will be built in to ${env.WORKSPACE}/"
-          echo "path to workspace: ${env.WORKSPACE}"
+          echo "project will be built in to ${WORKSPACE}/"
+          echo "path to workspace: ${WORKSPACE}"
           sh "export"
-          sh 'rm -rf /home/jenkins/workspace/css-maven-repo/.m2'
+          sh 'rm -rf ${WORKSPACE}/css-maven-repo/.m2'
         }
       }
 
@@ -127,7 +123,7 @@ pipeline {
             git(url: "${env.displayBuilderRepo}", branch: "${env.displayBuilderRepoBranch}")
           }
           sh "cd org.csstudio.display.builder/org.csstudio.display.builder.editor.rcp && ant -f javadoc.xml clean all"
-          sh "cd org.csstudio.display.builder && mvn ${env.MVNOPT} --settings ../ess-css-extra/maven/settings.xml -Dcss_repo=file:${env.WORKSPACE}/ess-css-extra/ess_css_comp_repo clean verify"
+          sh "cd org.csstudio.display.builder && mvn ${env.MVNOPT} --settings ../ess-css-extra/maven/settings.xml -Dcss_repo=file:${WORKSPACE}/ess-css-extra/ess_css_comp_repo clean verify"
         }
       }
 
@@ -156,7 +152,7 @@ pipeline {
         }
         steps{
           script {
-            def versionNBR = sh (script: """cat ${env.WORKSPACE}/org.csstudio.ess.product/features/org.csstudio.ess.product.configuration.feature/rootfiles/ess-version.txt""", returnStdout: true).trim()
+            def versionNBR = sh (script: """cat ${WORKSPACE}/org.csstudio.ess.product/features/org.csstudio.ess.product.configuration.feature/rootfiles/ess-version.txt""", returnStdout: true).trim()
             def uploadSpec = """{
             "files": [
             {

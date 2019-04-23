@@ -1,0 +1,226 @@
+#!groovy​
+def cssArtifactoryServer = Artifactory.server "${env.artifacoryServerID}"
+def cssArtifactoryBuildInfo = Artifactory.newBuildInfo()
+pipeline {
+
+  /*
+   * Environment sets up a map containing key : value pairs
+   * The variables will be exported to the shell jenkins uses to execute in.
+   * You can access these variables along with ones passed from the injector
+   * plugin by calling ${env.<variableName>}
+   */
+  environment {
+    MAVEN_OPTS="-Xmx2048m -Xms1024M -Xss128M -XX:-UseGCOverheadLimit"
+    MVNOPT="-q -B -P ess-css-settings,platform-default,csstudio-composite-repo-enable,eclipse-sites -Dmaven.repo.local=/home/jenkins/workspace/css-maven-repo/.m2 -Dcsstudio.composite.repo=/home/jenkins/workspace/${env.JOB_NAME}/ess-css-extra/ess_css_comp_repo"
+    EMAIL_BODY_FAILURE="${env.JOB_BASE_NAME} failed to build!\nDirect job link: ${env.RUN_DISPLAY_URL}"
+    EMAIL_BODY_SUCCESS="${env.JOB_BASE_NAME} built successfully!\nDirect job link: ${env.RUN_DISPLAY_URL}"
+    EMAIL_BODY_UNSTABLE="${env.JOB_BASE_NAME} created an unstable build!\nDirect job link: ${env.RUN_DISPLAY_URL}"
+    EMAIL_SUBJECT_FAILURE="${env.JOB_BASE_NAME} failed to build"
+    EMAIL_SUBJECT_SUCCESS="${env.JOB_BASE_NAME} built successfully"
+    EMAIL_SUBJECT_UNSTABLE="${env.JOB_BASE_NAME} created an unstable build"
+  }
+
+  /*
+   * Agent sets up which environment that the pipeline will execute inside.
+   * Can be specified to label of certain slave or spin up a docker container
+   * Can be applied to each stage separately or here to set for all stages.
+   */
+   agent {
+      label 'css'
+   }
+
+    /*
+     * build specific options, the same as the checkboxes for the jobs inside jenkins
+     */
+    options {
+      disableConcurrentBuilds()       //Disallow concurrent executions of the Pipeline
+      timeout(time:2, unit: 'HOURS')  //Set a timeout period for the Pipeline run, after which Jenkins should abort the Pipeline
+      timestamps()
+      skipDefaultCheckout()
+    }
+
+    /*
+     * Stages Are as a checkpoint and the steps ran will show up in the jenkins ui.
+     * The execution time for each stage will be monitored and all calls can be
+     * overviewed from the jenkins ui
+     */
+    stages {
+
+      /*
+       * Print out environment variables and make sure a clean working space is setup.
+       */
+      stage("00000\nworkspace preparation "){
+        steps{
+          echo "csstudioRepo = ${env.csstudioRepo}"
+          echo "branch = ${env.repoBranch} \nsend email to: ${env.email}"
+          echo "MVNOPT=${env.MVNOPT}  \nrunning on jenkinslave: ${env.NODE_NAME}"
+          echo "project will be built in to ${env.WORKSPACE}/"
+          echo "path to workspace: ${env.WORKSPACE}"
+          sh "export"
+          sh 'rm -rf /home/jenkins/workspace/css-maven-repo/.m2'
+        }
+      }
+
+      /*
+       * Getting the "css-extra" project, containing ESS-specific building files.
+       */
+      stage('00100\nclone ess‑css‑extra'){
+        steps {
+          dir("ess-css-extra"){
+            git(url: 'https://github.com/ESSICS/ess-css-extra.git', branch: "${env.repoBranch}")
+          }
+          sh 'ls'
+          sh 'cat ess-css-extra/maven/settings.xml'
+        }
+      }
+
+      /*
+       * Getting and building the "maven-osgi-bundles" project.
+       */
+      stage('00200\nmaven‑osgi‑bundles '){
+        steps {
+          dir("maven-osgi-bundles"){
+            git(url: "${env.csstudioRepo}/maven-osgi-bundles.git", branch: "${env.repoBranch}")
+          }
+          sh "cd maven-osgi-bundles && mvn ${env.MVNOPT} --settings ../ess-css-extra/maven/settings.xml clean verify"
+        }
+      }
+
+      /*
+       * Getting and building the "cs-studio-thirdparty" project.
+       */
+      stage('00300\ncs‑studio‑thirdparty'){
+        steps{
+          dir("cs-studio-thirdparty"){
+            git(url: "${env.csstudioRepo}/cs-studio-thirdparty.git", branch: "${env.repoBranch}")
+          }
+            sh "cd cs-studio-thirdparty && mvn ${env.MVNOPT} --settings ../ess-css-extra/maven/settings.xml clean verify"
+        }
+      }
+
+      /*
+       * Getting and building the "cs-studio" project.
+       */
+      stage('00500\ncs‑studio'){
+        steps{
+          dir("cs-studio"){
+            git(url: "${csstudioRepo}/cs-studio", branch: "${env.repoBranch}")
+            dir('applications'){}
+            dir('core'){}
+          }
+          sh 'ls cs-studio'
+          sh "cd cs-studio/core && mvn ${env.MVNOPT} --settings  ../../ess-css-extra/maven/settings.xml clean verify"
+          sh "cd cs-studio/applications && mvn ${env.MVNOPT} --settings ../../ess-css-extra/maven/settings.xml clean verify"
+        }
+      }
+
+      /*
+       * Getting and building the "org.csstudio.display.builder" project.
+       */
+      stage('00600\norg.csstudio.display.builder'){
+        steps{
+          dir("org.csstudio.display.builder"){
+            git(url: "${env.displayBuilderRepo}", branch: "${env.displayBuilderRepoBranch}")
+          }
+          sh "cd org.csstudio.display.builder/org.csstudio.display.builder.editor.rcp && ant -f javadoc.xml clean all"
+          sh "cd org.csstudio.display.builder && mvn ${env.MVNOPT} --settings ../ess-css-extra/maven/settings.xml -Dcss_repo=file:${env.WORKSPACE}/ess-css-extra/ess_css_comp_repo clean verify"
+        }
+      }
+
+      /*
+       * Getting and building the "org.csstudio.ess.product" project.
+       */
+      stage('00700\norg.csstudio.ess.product'){
+        steps{
+          dir("org.csstudio.ess.product"){
+            git(url: "${csstudioRepo}/org.csstudio.ess.product.git", branch: "${env.repoBranch}")
+          }
+		  sh "cd org.csstudio.ess.product && ./prepare-next-jenkins-release.sh ${env.repoBranch} ${env.BUILD_NUMBER}"
+		  sh "cd org.csstudio.ess.product && mvn ${env.MVNOPT} --settings ../ess-css-extra/maven/settings.xml clean verify"
+        }
+      }
+
+      /*
+       * Based on conditional, publishes binaries to a predefined artifactory server.
+       * "when" allows for conditionals inside the declarative syntax.
+       * The artifactory plugin doesn't fully support declarative pipeline.
+       * Therefore a script-block is needed.
+       */
+      stage('00800\ndeploy artifacts') {
+        when {
+          environment name: 'useArtifactory', value: 'true'
+        }
+        steps{
+          script {
+            def versionNBR = sh (script: """cat ${env.WORKSPACE}/org.csstudio.ess.product/features/org.csstudio.ess.product.configuration.feature/rootfiles/ess-version.txt""", returnStdout: true).trim()
+            def uploadSpec = """{
+            "files": [
+            {
+              "pattern": "org.csstudio.ess.product/repository/target/products/*.tar.gz",
+              "target": "${artifactoryFolder}/${versionNBR}/"
+            },
+            {
+              "pattern": "org.csstudio.ess.product/repository/target/products/*.zip",
+              "target": "${artifactoryFolder}/${versionNBR}/"
+            }
+            ]
+            }"""
+            cssArtifactoryServer.upload(uploadSpec, cssArtifactoryBuildInfo)
+            slackSend channel: "#cs-studio", message: "CS-Studio ver. ${versionNBR} loaded into Artifactory at ${artifactoryFolder}."
+          }
+        }
+      }
+      stage('00900\nenable build purging') {
+        when {
+          expression { env.repoBranch != 'production' }
+          environment name: 'useArtifactory', value: 'true'
+        }
+        steps {
+          script {
+            cssArtifactoryBuildInfo.retention maxBuilds: 7, deleteBuildArtifacts: true
+          }
+        }
+      }
+      stage('01000\nbuildInfo deployment and cleanup') {
+        when {
+          environment name: 'useArtifactory', value: 'true'
+        }
+        steps {
+          script {
+            cssArtifactoryBuildInfo.env.filter.addInclude("BUILD*")
+            cssArtifactoryBuildInfo.env.filter.addInclude("EPICS*")
+            cssArtifactoryBuildInfo.env.filter.addInclude("JAVA_HOME")
+            cssArtifactoryBuildInfo.env.collect()
+            cssArtifactoryServer.publishBuildInfo(cssArtifactoryBuildInfo)
+          }
+        }
+      }
+    }
+
+    /*
+     * Notify developers by email depending on the status of the pipeline after the run.
+     */
+    post {
+    /*
+     * Deletes all files created by the pipeline
+     */
+      always {
+        junit "**/surefire-reports/*.xml"
+        deleteDir()
+      }
+
+      failure {
+        mail from: "noreply@esss.se", to: "${email}", subject: "${env.EMAIL_SUBJECT_FAILURE}", body: "${env.EMAIL_BODY_FAILURE}"
+      }
+
+      unstable {
+        mail from: "noreply@esss.se", to: "${email}", subject: "${env.EMAIL_SUBJECT_UNSTABLE}", body: "${env.EMAIL_BODY_UNSTABLE}"
+      }
+
+      success {
+        mail from: "noreply@esss.se", to: "${email}", subject: "${env.EMAIL_SUBJECT_SUCCESS}", body: "${env.EMAIL_BODY_SUCCESS}"
+      }
+
+    }
+
+  }
