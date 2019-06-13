@@ -2,6 +2,7 @@
 #
 
 export JAVA_HOME=$JAVA8_HOME
+export MVN=/Applications/apache-maven-3.6.0/bin/mvn
 
 echo ""
 echo "===="
@@ -14,7 +15,7 @@ cd ..
 
 # To start fresh, clean your local repository
 # If you have accidentally invoked
-#   mvn install
+#   $MVN install
 # or want to assert that you start over fresh,
 # delete the Maven repository:
 # rm -rf $HOME/.m2/repository
@@ -31,38 +32,38 @@ echo ""
 echo "===="
 echo "==== BUILDING maven-osgi-bundles"
 echo "===="
-# (cd maven-osgi-bundles; time mvn $MVNOPT --settings ../ess-css-extra/maven/settings.xml clean verify) | tee 0_maven-osgi-bundles.log
+# (cd maven-osgi-bundles; time $MVN $MVNOPT --settings ../ess-css-extra/maven/settings.xml clean verify) | tee 0_maven-osgi-bundles.log
 
 echo ""
 echo "===="
 echo "==== BUILDING cs-studio-thirdparty"
 echo "===="
-# (cd cs-studio-thirdparty; time mvn $MVNOPT --settings ../ess-css-extra/maven/settings.xml clean verify) | tee 1_cs-studio-thirdparty.log
+# (cd cs-studio-thirdparty; time $MVN $MVNOPT --settings ../ess-css-extra/maven/settings.xml clean verify) | tee 1_cs-studio-thirdparty.log
 
 echo ""
 echo "===="
 echo "==== BUILDING cs-studio/core"
 echo "===="
-# (cd cs-studio/core; time mvn $MVNOPT --settings ../../ess-css-extra/maven/settings.xml clean verify) | tee 3_cs-studio-core.log
+# (cd cs-studio/core; time $MVN $MVNOPT --settings ../../ess-css-extra/maven/settings.xml clean verify) | tee 3_cs-studio-core.log
 
 echo ""
 echo "===="
 echo "==== BUILDING cs-studio/applications"
 echo "===="
-# (cd cs-studio/applications; time mvn $MVNOPT --settings ../../ess-css-extra/maven/settings.xml clean verify) | tee 4_cs-studio-applications.log
+# (cd cs-studio/applications; time $MVN $MVNOPT --settings ../../ess-css-extra/maven/settings.xml clean verify) | tee 4_cs-studio-applications.log
 
 echo ""
 echo "===="
 echo "==== BUILDING org.csstudio.display.builder"
 echo "===="
 (cd org.csstudio.display.builder/org.csstudio.display.builder.editor.rcp; time ant -f javadoc.xml clean all | tee ../../5_org.csstudio.display.builder.log)
-(cd org.csstudio.display.builder; time mvn $MVNOPT --settings ../ess-css-extra/maven/settings.xml -Dcss_repo=file:/Users/claudiorosati/Projects/GitHub/ess-css-extra/ess_css_comp_repo clean verify) | tee -a 5_org.csstudio.display.builder.log
+(cd org.csstudio.display.builder; time $MVN $MVNOPT --settings ../ess-css-extra/maven/settings.xml -Dcss_repo=file:/Users/claudiorosati/Projects/GitHub/ess-css-extra/ess_css_comp_repo clean verify) | tee -a 5_org.csstudio.display.builder.log
 
 # echo ""
 echo "===="
 echo "==== BUILDING org.csstudio.ess.product"
 echo "===="
-(cd org.csstudio.ess.product; time mvn $MVNOPT --settings ../ess-css-extra/maven/settings.xml clean verify) | tee 7_org.csstudio.ess.product.log
+(cd org.csstudio.ess.product; time $MVN $MVNOPT --settings ../ess-css-extra/maven/settings.xml clean verify) | tee 7_org.csstudio.ess.product.log
 
 echo ""
 echo "0_maven-osgi-bundles.log"
