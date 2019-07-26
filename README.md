@@ -14,6 +14,27 @@ This file contains the environment variables to be set and included into the ~/.
 
 This folder contains various files to be used by Maven during the build.
 
+## gitlab
+
+This folder contains the `CSStudio.gitlab-ci.yml` template used by GitLab to run the various pipelines.
+
+In each GitLab project, you should include this template in your `.gitlab-ci.yml` file and override the desired variables.
+
+Here is the list of default variables:
+
+```
+variables:
+  MAVEN_IMAGE: registry.esss.lu.se/ics-docker/maven:openjdk-8
+  MAVEN_OPTS: -Xmx2048m -Xms1024M -Xss128M -XX:-UseGCOverheadLimit
+  MVNOPT: "-q -B -P ess-css-settings,platform-default,csstudio-composite-repo-enable,eclipse-sites -Dmaven.repo.local=${CI_PROJECT_DIR}/css-maven-repo/.m2 -Dcsstudio.composite.repo=${CI_PROJECT_DIR}/ess-css-extra/ess_css_comp_repo"
+  REPO_BRANCH: master
+  CSSTUDIO_REPO_BASE_URL: https://github.com/ESSICS
+  DISPLAY_BUILDER_REPO: https://github.com/ESSICS/org.csstudio.display.builder
+  DISPLAY_BUILDER_REPO_BRANCH: master
+  RELEASE_TO_ARTIFACTORY: "true"
+  ARTIFACTORY_FOLDER: CSSGitlab/development
+```
+
 ## jenkins
 
 This folder contains the file used by Jenkins to run the various pipelines.
