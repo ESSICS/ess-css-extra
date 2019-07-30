@@ -1,7 +1,7 @@
 variables:
   MAVEN_IMAGE: registry.esss.lu.se/ics-docker/maven:openjdk-8
   MAVEN_OPTS: -Xmx2048m -Xms1024M -Xss128M -XX:-UseGCOverheadLimit
-  MVNOPT: "-q -B -P ess-css-settings,platform-default,csstudio-composite-repo-enable,eclipse-sites -Dmaven.repo.local=${CI_PROJECT_DIR}/css-maven-repo/.m2 -Dcsstudio.composite.repo=${CI_PROJECT_DIR}/ess-css-extra/ess_css_comp_repo"
+  MVNOPT: "-q -B -P ess-css-settings,platform-default,csstudio-composite-repo-enable,eclipse-sites -Dmaven.repo.local=${CI_PROJECT_DIR}/css-maven-repo/.m2 -Dcsstudio.composite.repo=${CI_PROJECT_DIR}/ess-css-extra/ess_css_comp_repo --settings ${CI_PROJECT_DIR}/ess-css-extra/maven/settings.xml"
   REPO_BRANCH: master
   CSSTUDIO_REPO_BASE_URL: https://github.com/ESSICS
   DISPLAY_BUILDER_REPO: https://github.com/ESSICS/org.csstudio.display.builder
@@ -32,24 +32,24 @@ build:
     - cat ess-css-extra/maven/settings.xml
     # Build the "maven-osgi-bundles" project.
     - git clone --branch ${REPO_BRANCH} ${CSSTUDIO_REPO_BASE_URL}/maven-osgi-bundles.git
-    - cd maven-osgi-bundles; mvn ${MVNOPT} --settings ../ess-css-extra/maven/settings.xml clean verify; cd -
+    - mvn ${MVNOPT} -f maven-osgi-bundles clean verify
     # Build the "cs-studio-thirdparty" project
     - git clone --branch ${REPO_BRANCH} ${CSSTUDIO_REPO_BASE_URL}/cs-studio-thirdparty.git
-    - cd cs-studio-thirdparty; mvn ${MVNOPT} --settings ../ess-css-extra/maven/settings.xml clean verify; cd -
+    - mvn ${MVNOPT} -f cs-studio-thirdparty clean verify
     # Build the "cs-studio" project
     - git clone --branch ${REPO_BRANCH} ${CSSTUDIO_REPO_BASE_URL}/cs-studio.git
-    - cd cs-studio/core; mvn ${MVNOPT} --settings ../../ess-css-extra/maven/settings.xml clean verify; cd -
-    - cd cs-studio/applications; mvn ${MVNOPT} --settings ../../ess-css-extra/maven/settings.xml clean verify; cd -
+    - mvn ${MVNOPT} -f cs-studio/core clean verify
+    - mvn ${MVNOPT} -f cs-studio/applications clean verify
     # Build the "org.csstudio.display.builder" project
     - git clone --branch ${DISPLAY_BUILDER_REPO_BRANCH} ${DISPLAY_BUILDER_REPO}
-    - cd org.csstudio.display.builder/org.csstudio.display.builder.editor.rcp; ant -f javadoc.xml clean all; cd -
-    - cd org.csstudio.display.builder; mvn ${MVNOPT} --settings ../ess-css-extra/maven/settings.xml -Dcss_repo=file:${CI_PROJECT_DIR}/ess-css-extra/ess_css_comp_repo clean verify; cd -
+    - ant -f org.csstudio.display.builder/org.csstudio.display.builder.editor.rcp/javadoc.xml clean all
+    - mvn ${MVNOPT} -f org.csstudio.display.builder -Dcss_repo=file:${CI_PROJECT_DIR}/ess-css-extra/ess_css_comp_repo clean verify
     # Build the "org.csstudio.ess.product" project
     - git clone --branch ${REPO_BRANCH} ${CSSTUDIO_REPO_BASE_URL}/org.csstudio.ess.product.git
     # To replace Jenkins BUILD_NUMBER we use CI_PIPELINE_IID (unique id of the current pipeline scoped to project)
     # We could also use CI_PIPELINE_ID (unique id of the current pipeline that GitLab CI uses internally)
     - cd org.csstudio.ess.product; ./prepare-next-jenkins-release.sh ${REPO_BRANCH} ${CI_PIPELINE_IID}; cd -
-    - cd org.csstudio.ess.product; mvn ${MVNOPT} --settings ../ess-css-extra/maven/settings.xml clean verify; cd -
+    - mvn ${MVNOPT} -f org.csstudio.ess.product clean verify
   artifacts:
     expire_in: 24h
     paths:
