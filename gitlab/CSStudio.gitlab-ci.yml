@@ -1,0 +1,99 @@
+variables:
+  MAVEN_IMAGE: registry.esss.lu.se/ics-docker/maven:openjdk-8
+  MAVEN_OPTS: -Xmx2048m -Xms1024M -Xss128M -XX:-UseGCOverheadLimit
+  MVNOPT: "-q -B -P ess-css-settings,platform-default,csstudio-composite-repo-enable,eclipse-sites -Dmaven.repo.local=${CI_PROJECT_DIR}/css-maven-repo/.m2 -Dcsstudio.composite.repo=${CI_PROJECT_DIR}/ess-css-extra/ess_css_comp_repo --settings ${CI_PROJECT_DIR}/ess-css-extra/maven/settings.xml"
+  REPO_BRANCH: master
+  CSSTUDIO_REPO_BASE_URL: https://github.com/ESSICS
+  DISPLAY_BUILDER_REPO: https://github.com/ESSICS/org.csstudio.display.builder
+  DISPLAY_BUILDER_REPO_BRANCH: master
+  RELEASE_TO_ARTIFACTORY: "true"
+  ARTIFACTORY_FOLDER: CSSGitlab/development
+
+stages:
+  - build
+  - release
+  - clean
+
+build:
+  tags:
+    - docker
+  image: ${MAVEN_IMAGE}
+  stage: build
+  before_script:
+    - rm -rf ${CI_PROJECT_DIR}/css-maven-repo/.m2
+    - "echo CSSTUDIO_REPO_BASE_URL: $CSSTUDIO_REPO_BASE_URL"
+    - "echo BRANCH: $REPO_BRANCH"
+    - "echo MVNOPT: $MVNOPT"
+    - "echo CI_PROJECT_DIR: $CI_PROJECT_DIR"
+    - "echo CI_PROJECT_NAME: $CI_PROJECT_NAME"
+  script:
+    # Get the "ess-css-extra" project, containing ESS-specific building files.
+    - git clone --branch ${REPO_BRANCH} https://github.com/ESSICS/ess-css-extra.git
+    - cat ess-css-extra/maven/settings.xml
+    # Build the "maven-osgi-bundles" project.
+    - git clone --branch ${REPO_BRANCH} ${CSSTUDIO_REPO_BASE_URL}/maven-osgi-bundles.git
+    - mvn ${MVNOPT} -f maven-osgi-bundles clean verify
+    # Build the "cs-studio-thirdparty" project
+    - git clone --branch ${REPO_BRANCH} ${CSSTUDIO_REPO_BASE_URL}/cs-studio-thirdparty.git
+    - mvn ${MVNOPT} -f cs-studio-thirdparty clean verify
+    # Build the "cs-studio" project
+    - git clone --branch ${REPO_BRANCH} ${CSSTUDIO_REPO_BASE_URL}/cs-studio.git
+    - mvn ${MVNOPT} -f cs-studio/core clean verify
+    - mvn ${MVNOPT} -f cs-studio/applications clean verify
+    # Build the "org.csstudio.display.builder" project
+    - git clone --branch ${DISPLAY_BUILDER_REPO_BRANCH} ${DISPLAY_BUILDER_REPO}
+    - ant -f org.csstudio.display.builder/org.csstudio.display.builder.editor.rcp/javadoc.xml clean all
+    - mvn ${MVNOPT} -f org.csstudio.display.builder -Dcss_repo=file:${CI_PROJECT_DIR}/ess-css-extra/ess_css_comp_repo clean verify
+    # Build the "org.csstudio.ess.product" project
+    - git clone --branch ${REPO_BRANCH} ${CSSTUDIO_REPO_BASE_URL}/org.csstudio.ess.product.git
+    # To replace Jenkins BUILD_NUMBER we use CI_PIPELINE_IID (unique id of the current pipeline scoped to project)
+    # We could also use CI_PIPELINE_ID (unique id of the current pipeline that GitLab CI uses internally)
+    - cd org.csstudio.ess.product; ./prepare-next-jenkins-release.sh ${REPO_BRANCH} ${CI_PIPELINE_IID}; cd -
+    - mvn ${MVNOPT} -f org.csstudio.ess.product clean verify
+  artifacts:
+    expire_in: 24h
+    paths:
+      - org.csstudio.ess.product/features/org.csstudio.ess.product.configuration.feature/rootfiles/ess-version.txt
+      - org.csstudio.ess.product/repository/target/products/*.tar.gz
+      - org.csstudio.ess.product/repository/target/products/*.zip
+      # "**" not supported yet
+      - ./*/*/target/surefire-reports/*.xml
+      - ./*/*/*/*/*/target/surefire-reports/*.xml
+    reports:
+      junit:
+        - ./*/*/target/surefire-reports/*.xml
+        - ./*/*/*/*/*/target/surefire-reports/*.xml
+
+release:
+  tags:
+    - docker
+  stage: release
+  image: registry.esss.lu.se/ics-docker/jfrog:latest
+  before_script:
+    - jfrog rt config artifactory --url=${ARTIFACTORY_URL} --apikey=${ARTIFACTORY_API_KEY}
+  script:
+    - version_nb=$(cat org.csstudio.ess.product/features/org.csstudio.ess.product.configuration.feature/rootfiles/ess-version.txt)
+    - "echo version number: $version_nb"
+    - jfrog rt upload --build-name ${CI_PROJECT_NAME} --build-number ${CI_PIPELINE_IID} "org.csstudio.ess.product/repository/target/products/*" ${ARTIFACTORY_FOLDER}/${version_nb}/
+    - jfrog rt build-collect-env ${CI_PROJECT_NAME} ${CI_PIPELINE_IID}
+    - jfrog rt build-publish --env-include="*CI_PIPELINE*;*CI_PROJECT*;*MAVEN*;*MVNOPT;*REPO_BRANCH;*ARTIFACTORY_FOLDER;*CSSTUDIO*;*DISPLAY_BUILDER*" ${CI_PROJECT_NAME} ${CI_PIPELINE_IID}
+  only:
+    variables:
+      - $RELEASE_TO_ARTIFACTORY == "true"
+
+discard_old_builds:
+  tags:
+    - docker
+  stage: clean
+  image: registry.esss.lu.se/ics-docker/jfrog:latest
+  dependencies: []
+  before_script:
+    - jfrog rt config artifactory --url=${ARTIFACTORY_URL} --apikey=${ARTIFACTORY_API_KEY}
+  script:
+    - jfrog rt build-discard ${CI_PROJECT_NAME} --max-builds=7 --delete-artifacts=true
+  only:
+    variables:
+      - $RELEASE_TO_ARTIFACTORY == "true"
+  except:
+    variables:
+      - $REPO_BRANCH == "production"
