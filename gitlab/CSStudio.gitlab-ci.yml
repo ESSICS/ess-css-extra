@@ -8,6 +8,7 @@ variables:
   DISPLAY_BUILDER_REPO_BRANCH: master
   RELEASE_TO_ARTIFACTORY: "true"
   ARTIFACTORY_FOLDER: CSSGitlab/development
+  SONARQUBE_ANALYSIS: "false"
 
 stages:
   - build
@@ -39,11 +40,14 @@ build:
     # Build the "cs-studio" project
     - git clone --branch ${REPO_BRANCH} ${CSSTUDIO_REPO_BASE_URL}/cs-studio.git
     - mvn ${MVNOPT} -f cs-studio/core clean verify
+    - if [ ${SONARQUBE_ANALYSIS} = "true" ]; then mvn ${MVNOPT} -f cs-studio/core -Dsonar.projectName="CSStudio core" -Dsonar.login=${SONARQUBE_TOKEN} sonar:sonar; fi
     - mvn ${MVNOPT} -f cs-studio/applications clean verify
+    - if [ ${SONARQUBE_ANALYSIS} = "true" ]; then mvn ${MVNOPT} -f cs-studio/applications -Dsonar.projectName="CSStudio applications" -Dsonar.login=${SONARQUBE_TOKEN} sonar:sonar; fi
     # Build the "org.csstudio.display.builder" project
     - git clone --branch ${DISPLAY_BUILDER_REPO_BRANCH} ${DISPLAY_BUILDER_REPO}
     - ant -f org.csstudio.display.builder/org.csstudio.display.builder.editor.rcp/javadoc.xml clean all
     - mvn ${MVNOPT} -f org.csstudio.display.builder -Dcss_repo=file:${CI_PROJECT_DIR}/ess-css-extra/ess_css_comp_repo clean verify
+    - if [ ${SONARQUBE_ANALYSIS} = "true" ]; then mvn ${MVNOPT} -f org.csstudio.display.builder -Dcss_repo=file:${CI_PROJECT_DIR}/ess-css-extra/ess_css_comp_repo -Dsonar.projectName="CSStudio display-builder" -Dsonar.login=${SONARQUBE_TOKEN} sonar:sonar; fi
     # Build the "org.csstudio.ess.product" project
     - git clone --branch ${REPO_BRANCH} ${CSSTUDIO_REPO_BASE_URL}/org.csstudio.ess.product.git
     # To replace Jenkins BUILD_NUMBER we use CI_PIPELINE_IID (unique id of the current pipeline scoped to project)
